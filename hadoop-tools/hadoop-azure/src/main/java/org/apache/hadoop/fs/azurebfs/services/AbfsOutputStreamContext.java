@@ -29,6 +29,8 @@ public class AbfsOutputStreamContext extends AbfsStreamContext {
 
   private boolean disableOutputStreamFlush;
 
+  private AbfsOutputStreamStatistics streamStatistics;
+
   private boolean isAppendBlob;
 
   public AbfsOutputStreamContext(final long sasTokenRenewPeriodForStreamsInSeconds) {
@@ -52,7 +54,13 @@ public class AbfsOutputStreamContext extends AbfsStreamContext {
     return this;
   }
 
-  public AbfsOutputStreamContext withAppendBlob(
+  public AbfsOutputStreamContext withStreamStatistics(
+      final AbfsOutputStreamStatistics streamStatistics) {
+    this.streamStatistics = streamStatistics;
+    return this;
+  }
+
+    public AbfsOutputStreamContext withAppendBlob(
           final boolean isAppendBlob) {
     this.isAppendBlob = isAppendBlob;
     return this;
@@ -73,6 +81,10 @@ public class AbfsOutputStreamContext extends AbfsStreamContext {
 
   public boolean isDisableOutputStreamFlush() {
     return disableOutputStreamFlush;
+  }
+
+  public AbfsOutputStreamStatistics getStreamStatistics() {
+    return streamStatistics;
   }
 
   public boolean isAppendBlob() {

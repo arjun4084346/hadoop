@@ -38,6 +38,7 @@ import com.google.common.base.Preconditions;
 
 import org.apache.hadoop.fs.azurebfs.contracts.exceptions.AbfsRestOperationException;
 import org.apache.hadoop.fs.azurebfs.contracts.exceptions.AzureBlobFileSystemException;
+import org.apache.hadoop.fs.azurebfs.utils.CachedSASToken;
 import org.apache.hadoop.io.ElasticByteBufferPool;
 import org.apache.hadoop.fs.FileSystem.Statistics;
 import org.apache.hadoop.fs.FSExceptionMessages;
@@ -67,6 +68,9 @@ public class AbfsOutputStream extends OutputStream implements Syncable, StreamCa
   private ConcurrentLinkedDeque<WriteOperation> writeOperations;
   private final ThreadPoolExecutor threadExecutor;
   private final ExecutorCompletionService<Void> completionService;
+
+  // SAS tokens can be re-used until they expire
+  private CachedSASToken cachedSasToken;
 
   /**
    * Queue storing buffers with the size of the Azure block ready for
@@ -109,6 +113,8 @@ public class AbfsOutputStream extends OutputStream implements Syncable, StreamCa
         TimeUnit.SECONDS,
         new LinkedBlockingQueue<Runnable>());
     this.completionService = new ExecutorCompletionService<>(this.threadExecutor);
+    this.cachedSasToken = new CachedSASToken(
+        abfsOutputStreamContext.getSasTokenRenewPeriodForStreamsInSeconds());
   }
 
   /**
@@ -318,7 +324,8 @@ public class AbfsOutputStream extends OutputStream implements Syncable, StreamCa
         try (AbfsPerfInfo perfInfo = new AbfsPerfInfo(tracker,
                 "writeCurrentBufferToService", "append")) {
           AbfsRestOperation op = client.append(path, offset, bytes, 0,
-                  bytesLength);
+                  bytesLength, cachedSasToken.get());
+          cachedSasToken.update(op.getSasToken());
           perfInfo.registerResult(op.getResult());
           byteBufferPool.putBuffer(ByteBuffer.wrap(bytes));
           perfInfo.registerSuccess(true);
@@ -368,7 +375,8 @@ public class AbfsOutputStream extends OutputStream implements Syncable, StreamCa
     AbfsPerfTracker tracker = client.getAbfsPerfTracker();
     try (AbfsPerfInfo perfInfo = new AbfsPerfInfo(tracker,
             "flushWrittenBytesToServiceInternal", "flush")) {
-      AbfsRestOperation op = client.flush(path, offset, retainUncommitedData, isClose);
+      AbfsRestOperation op = client.flush(path, offset, retainUncommitedData, isClose, cachedSasToken.get());
+      cachedSasToken.update(op.getSasToken());
       perfInfo.registerResult(op.getResult()).registerSuccess(true);
     } catch (AzureBlobFileSystemException ex) {
       if (ex instanceof AbfsRestOperationException) {

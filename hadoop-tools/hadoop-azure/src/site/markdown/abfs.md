@@ -691,6 +691,96 @@ Config `fs.azure.account.hns.enabled` provides an option to specify whether
 Config `fs.azure.enable.check.access` needs to be set true to enable
 the AzureBlobFileSystem.access().
 
+### <a name="idempotency"></a> Operation Idempotency
+
+Requests failing due to server timeouts and network failures will be retried.
+PUT/POST operations are idempotent and need no specific handling
+except for Rename and Delete operations.
+
+Rename idempotency checks are made by ensuring the LastModifiedTime on destination
+is recent if source path is found to be non-existent on retry.
+
+Delete is considered to be idempotent by default if the target does not exist on
+retry.
+
+### <a name="featureconfigoptions"></a> Primary User Group Options
+The group name which is part of FileStatus and AclStatus will be set the same as
+the username if the following config is set to true
+`fs.azure.skipUserGroupMetadataDuringInitialization`.
+
+### <a name="ioconfigoptions"></a> IO Options
+The following configs are related to read and write operations.
+
+`fs.azure.io.retry.max.retries`: Sets the number of retries for IO operations.
+Currently this is used only for the server call retry logic. Used within
+AbfsClient class as part of the ExponentialRetryPolicy. The value should be
+>= 0.
+
+`fs.azure.write.request.size`: To set the write buffer size. Specify the value
+in bytes. The value should be between 16384 to 104857600 both inclusive (16 KB
+to 100 MB). The default value will be 8388608 (8 MB).
+
+`fs.azure.read.request.size`: To set the read buffer size.Specify the value in
+bytes. The value should be between 16384 to 104857600 both inclusive (16 KB to
+100 MB). The default value will be 4194304 (4 MB).
+
+`fs.azure.readaheadqueue.depth`: Sets the readahead queue depth in
+AbfsInputStream. In case the set value is negative the read ahead queue depth
+will be set as Runtime.getRuntime().availableProcessors(). By default the value
+will be -1.
+
+### <a name="securityconfigoptions"></a> Security Options
+`fs.azure.always.use.https`: Enforces to use HTTPS instead of HTTP when the flag
+is made true. Irrespective of the flag, AbfsClient will use HTTPS if the secure
+scheme (ABFSS) is used or OAuth is used for authentication. By default this will
+be set to true.
+
+`fs.azure.ssl.channel.mode`: Initializing DelegatingSSLSocketFactory with the
+specified SSL channel mode. Value should be of the enum
+DelegatingSSLSocketFactory.SSLChannelMode. The default value will be
+DelegatingSSLSocketFactory.SSLChannelMode.Default.
+
+### <a name="serverconfigoptions"></a> Server Options
+When the config `fs.azure.io.read.tolerate.concurrent.append` is made true, the
+If-Match header sent to the server for read calls will be set as * otherwise the
+same will be set with ETag. This is basically a mechanism in place to handle the
+reads with optimistic concurrency.
+Please refer the following links for further information.
+1. https://docs.microsoft.com/en-us/rest/api/storageservices/datalakestoragegen2/path/read
+2. https://azure.microsoft.com/de-de/blog/managing-concurrency-in-microsoft-azure-storage-2/
+
+listStatus API fetches the FileStatus information from server in a page by page
+manner. The config `fs.azure.list.max.results` used to set the maxResults URI
+ param which sets the pagesize(maximum results per call). The value should
+ be >  0. By default this will be 500. Server has a maximum value for this
+ parameter as 5000. So even if the config is above 5000 the response will only
+contain 5000 entries. Please refer the following link for further information.
+https://docs.microsoft.com/en-us/rest/api/storageservices/datalakestoragegen2/path/list
+
+### <a name="throttlingconfigoptions"></a> Throttling Options
+ABFS driver has the capability to throttle read and write operations to achieve
+maximum throughput by minimizing errors. The errors occur when the account
+ingress or egress limits are exceeded and, the server-side throttles requests.
+Server-side throttling causes the retry policy to be used, but the retry policy
+sleeps for long periods of time causing the total ingress or egress throughput
+to be as much as 35% lower than optimal. The retry policy is also after the
+fact, in that it applies after a request fails. On the other hand, the
+client-side throttling implemented here happens before requests are made and
+sleeps just enough to minimize errors, allowing optimal ingress and/or egress
+throughput. By default the throttling mechanism is enabled in the driver. The
+same can be disabled by setting the config `fs.azure.enable.autothrottling`
+to false.
+
+### <a name="renameconfigoptions"></a> Rename Options
+`fs.azure.atomic.rename.key`: Directories for atomic rename support can be
+specified comma separated in this config. The driver prints the following
+warning log if the source of the rename belongs to one of the configured
+directories. "The atomic rename feature is not supported by the ABFS scheme
+; however, rename, create and delete operations are atomic if Namespace is
+enabled for your Azure Storage account."
+The directories can be specified as comma separated values. By default the value
+is "/hbase"
+
 ### <a name="perfoptions"></a> Perf Options
 
 #### <a name="abfstracklatencyoptions"></a> 1. HTTP Request Tracking Options

@@ -540,7 +540,8 @@ public class AbfsClient {
     return createRequestUrl(EMPTY_STRING, query);
   }
 
-  private URL createRequestUrl(final String path, final String query)
+  @VisibleForTesting
+  protected URL createRequestUrl(final String path, final String query)
           throws AzureBlobFileSystemException {
     final String base = baseUrl.toString();
     String encodedPath = path;
